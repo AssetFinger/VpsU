@@ -1,0 +1,89 @@
+#### bikin file Setup.sh
+
+# Add user & setup ngrok
+sudo useradd -m $(jq -r '.inputs.username' $GITHUB_EVENT_PATH)
+sudo adduser $(jq -r '.inputs.username' $GITHUB_EVENT_PATH) sudo
+echo $(jq -r '.inputs.username' $GITHUB_EVENT_PATH):$(jq -r '.inputs.password' $GITHUB_EVENT_PATH) | sudo chpasswd
+sudo sed -i 's/\/bin\/sh/\/bin\/bash/g' /etc/passwd
+sudo hostname $(jq -r '.inputs.computername' $GITHUB_EVENT_PATH)
+wget -q https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz
+tar -xvzf ngrok-v3-stable-linux-amd64.tgz
+chmod +x ./ngrok
+echo -e "$(jq -r '.inputs.password' $GITHUB_EVENT_PATH)\n$(jq -r '.inputs.password' $GITHUB_EVENT_PATH)" | sudo passwd "$USER"
+rm -f .ngrok.log
+./ngrok authtoken $(jq -r '.inputs.authtoken' $GITHUB_EVENT_PATH)
+./ngrok tcp 22 --log ".ngrok.log" &
+sleep 10
+echo "Ngrok Setup Completeed"
+
+#### bikin file Ip.sh
+
+_ERR=$(grep "command failed" < .ngrok.log)
+
+if [[ -z "$_ERR" ]]; then
+    echo $(grep -o -E "tcp://(.+)" < .ngrok.log | sed "s/tcp:\/\//ssh $(jq -r '.inputs.username' $GITHUB_EVENT_PATH)@/" | sed "s/:/ -p /")
+else
+    echo "$_ERR"
+    exit 4
+fi
+
+
+#### bikin di action file .yml
+
+name: Ubuntu
+
+on:
+  workflow_dispatch:
+    inputs:
+      authtoken:
+        description: 'NGROK_AUTH_TOKEN'
+        required: true
+      computername:
+        description: 'MACHINE_NAME'
+        default: 'ubuntu'
+        required: true
+      username:
+        description: 'USER_NAME'
+        default: 'user'
+        required: true
+      password:
+        description: 'USER_PASSWORD'
+        default: 'root'
+        required: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3.0.2
+    - name: Menyiapkan Data
+      run: |
+        _Token=$(jq -r '.inputs.authtoken' $GITHUB_EVENT_PATH)
+        _CName=$(jq -r '.inputs.computername' $GITHUB_EVENT_PATH)
+        _Pass=$(jq -r '.inputs.password' $GITHUB_EVENT_PATH)
+        echo ::add-mask::$_Token
+        echo ::add-mask::$_CName
+        echo ::add-mask::$_Pass
+        echo NGROK_TOKEN="$_Token" >> $GITHUB_ENV
+        echo ComputerName="$_CName" >> $GITHUB_ENV
+        echo Password="$_Pass" >> $GITHUB_ENV
+    - name: Menyiapkan Update
+      run: |
+        sudo apt-get update
+        sudo apt-get upgrade
+    - name: Menyiapkan Ngrok
+      run:  bash Setup.sh "${{ env.NGROK_TOKEN }}" "${{ env.ComputerName }}" "${{ github.event.inputs.username }}" "${{ env.Password }}"
+    - name: IP Untuk Konek SSH
+      run: bash Ip.sh "${{ github.event.inputs.username }}"
+    - name: Menjaga Tetap Menyala
+      run: ping 127.0.0.1 > null
+
+
+
+#### Yang mau menyisihkan Donasi silahkan...:)
+Evm : 0xcdBcCE83100828DB71349174Ba0c505aCCE7d316
+atau hub : assetfinger@gmail.com
